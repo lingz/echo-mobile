@@ -9,19 +9,27 @@
     tools:context=".MainActivity" >
 
     <TextView
+        android:id="@+id/textView1"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/hello_world" />
-    
+
     <Button
-		android:id="@+id/bt_speak" 
-		android:layout_width="fill_parent" 
-	    android:layout_height="wrap_content" 
-	    android:text="Speak"/>
-	<TextView  
-		android:id="@+id/tv_result" 
-	    android:layout_width="fill_parent" 
-	    android:layout_height="wrap_content" 
-	    android:text=""/>
+        android:id="@+id/start"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:onClick="startRecording"
+        android:text="Start" >
+    </Button>
+
+    <Button
+        android:id="@+id/stop"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignTop="@+id/textView1"
+        android:layout_marginLeft="34dp"
+        android:layout_toRightOf="@+id/textView1"
+        android:onClick="stopRecording"
+        android:text="Stop" />
 
 </RelativeLayout>
