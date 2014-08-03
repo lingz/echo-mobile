@@ -1,7 +1,23 @@
 package com.example.echo;
 
+import io.socket.IOAcknowledge;
+import io.socket.IOCallback;
+import io.socket.SocketIO;
+import io.socket.SocketIOException;
+
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.net.MalformedURLException;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import com.firebase.client.DataSnapshot;
+import com.firebase.client.Firebase;
+import com.firebase.client.FirebaseError;
+import com.firebase.client.ValueEventListener;
 
 import android.media.MediaRecorder;
 import android.net.Uri;
@@ -21,11 +37,21 @@ public class MainActivity extends Activity {
 	MediaRecorder mrec ;
 	File audiofile = null;
 	private static final String TAG="SoundRecordingDemo";
+	Firebase myFirebaseRef;
 	
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        
+        myFirebaseRef = new Firebase("https://echokaffy.firebaseio.com/");
+        myFirebaseRef.child("message").addValueEventListener(new ValueEventListener() {
+    	    @Override
+    	    public void onDataChange(DataSnapshot snapshot) {
+    	        System.out.println(snapshot.getValue());  //prints "Do you have data? You'll love Firebase."
+    	    }
+    	    @Override public void onCancelled(FirebaseError error) { }
+    	});
     }
 
 
@@ -58,7 +84,7 @@ public class MainActivity extends Activity {
     	mrec.prepare();
     	mrec.start(); 
     }
-    public void stopRecording(View v) {
+    public void stopRecording(View v) throws MalformedURLException {
     	System.out.println("stopRecording");
        mrec.stop();
        mrec.reset();
@@ -66,7 +92,7 @@ public class MainActivity extends Activity {
        mrec = null;
        processaudiofile();
     }
-    protected void processaudiofile() { // Saves the audio file
+    protected void processaudiofile() throws MalformedURLException { // Saves the audio file
        ContentValues values = new ContentValues(3);
        long current = System.currentTimeMillis();
        values.put(MediaStore.Audio.Media.TITLE, "audio" + audiofile.getName());
@@ -78,8 +104,12 @@ public class MainActivity extends Activity {
        Uri base = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
        Uri newUri = contentResolver.insert(base, values);
        System.out.println(audiofile.getAbsolutePath());
-        
-       sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, newUri));
+       
+       //newUri = Uri.parse("http://4773af77.ngrok.com/test");
+       
+       System.out.println(newUri);
+       sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, newUri));   
+       myFirebaseRef.child("message").setValue("Do you have data? You'll love Firebase.");   
     }
     
 }
