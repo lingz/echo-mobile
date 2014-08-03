@@ -7,6 +7,7 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -46,7 +47,7 @@ public class FirebaseUtility {
 
 	public static String speechFragmentToString(short[] audioData) {
 		byte[] biteme = shortArrayToByteArray(audioData);
-		WaveHeader wh = new WaveHeader(WaveHeader.FORMAT_PCM, 1, 16000, 16, biteme.length);
+		WaveHeader wh = new WaveHeader(WaveHeader.FORMAT_PCM, (short) 1, 16000, (short) 16, biteme.length);
 		
 		String whSerialized = serialize(wh);
 		String b64 = Base64.encodeToString(biteme, Base64.DEFAULT);
