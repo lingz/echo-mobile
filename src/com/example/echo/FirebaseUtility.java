@@ -17,22 +17,45 @@ import android.util.Log;
 import com.firebase.client.DataSnapshot;
 import com.firebase.client.Firebase;
 import com.firebase.client.FirebaseError;
+import com.firebase.client.MutableData;
 import com.firebase.client.ValueEventListener;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class FirebaseUtility {
 
-	private static final String url = "https://echokaffy.firebaseio.com/";
-	private final Firebase userFirebaseRef;
+	private static final String url = "https://echo-transcript.firebaseio.com/";
+	private final Firebase jobQueue;
 	private int count = 0;
+    private String conferenceCode;
+    private String userId;
 	
-	public FirebaseUtility(String conferenceCode, String user) {
-		userFirebaseRef = new Firebase(url).child(conferenceCode).child(user);
+	public FirebaseUtility(String conferenceCode, String userId) {
+		jobQueue = new Firebase(url).child("jobs");
+        this.conferenceCode = conferenceCode;
+        this.userId = userId;
 	}
 
-//	public void pushSegment(SpeechFragment fragment) {
-//		userFirebaseRef.child("count").setValue(count);
-//		userFirebaseRef.child(Integer.toString(count)).setValue(fragmentToMap(fragment));
-//	}
+	public void pushSegment(byte[] segmentByteArray) {
+        String data = speechFragmentToString(segmentByteArray);
+
+        Map<String, String> jobQueuePackage = createJobPackage(data);
+
+
+
+		jobQueue.child(Integer.toString(count)).setValue(jobQueuePackage);
+    }
+
+    private Map<String, String> createJobPackage(String base64)  {
+        Map<String, String> jobPackage = new HashMap<String, String>();
+        jobPackage.put("conferenceCode", conferenceCode);
+        jobPackage.put("userId", userId);
+        jobPackage.put("base64", base64);
+
+        return jobPackage;
+
+    }
 //
 //	public static Map<String, String> fragmentToMap(SpeechFragment fragment) {
 //		Map<String, String> map = new HashMap<String, String>();

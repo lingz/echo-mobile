@@ -34,7 +34,7 @@ public class MainActivity extends Activity {
 
     private int fragmentBufferLength = 0;
 
-    private ArrayList<short[]> fragmentBuffer = new ArrayList<short[]>();
+    private ArrayList<byte[]> fragmentBuffer = new ArrayList<byte[]>();
 
 
     @Override
@@ -104,7 +104,7 @@ public class MainActivity extends Activity {
 
             recordingStartTime = System.currentTimeMillis();
             lastEndTime = recordingStartTime;
-            short[] buffer = new short[RECORDER_BUFFER_SIZE];
+            byte[] buffer = new byte[RECORDER_BUFFER_SIZE];
 
 
             while (!interrupted()) {
@@ -118,7 +118,8 @@ public class MainActivity extends Activity {
                 }
             }
 
-            processSoundSegment();
+            byte[] soundSegmentData = processSoundSegment();
+            fbase.pushSegment(soundSegmentData);
             recorder.stop();
             recorder.release();
 
@@ -127,17 +128,16 @@ public class MainActivity extends Activity {
         private byte[] processSoundSegment() {
 
 
-            byte[] flattenedRecordBuffer = new byte[fragmentBufferLength * 2 + 44];
+            byte[] flattenedRecordBuffer = new byte[fragmentBufferLength + 44];
 
-            byte[] wavHeader = generateWaveFileHeader(fragmentBufferLength * 2);
+            byte[] wavHeader = generateWaveFileHeader(fragmentBufferLength);
 
             System.arraycopy(wavHeader, 0, flattenedRecordBuffer, 0, 44);
 
             int bufferProgress = 44;
 
-            for (short[] miniBuffer : fragmentBuffer) {
-                byte[] byteMiniBuffer = shortArrayToByteArray(miniBuffer);
-                System.arraycopy(byteMiniBuffer, 0, flattenedRecordBuffer, bufferProgress, miniBuffer.length);
+            for (byte[] miniBuffer : fragmentBuffer) {
+                System.arraycopy(miniBuffer, 0, flattenedRecordBuffer, bufferProgress, miniBuffer.length);
                 bufferProgress += miniBuffer.length;
             }
 
@@ -147,36 +147,36 @@ public class MainActivity extends Activity {
 
 
             fragmentBufferLength = 0;
-            fragmentBuffer = new ArrayList<short[]>();
+            fragmentBuffer = new ArrayList<byte[]>();
 
             System.out.println("DONE: " + flattenedRecordBuffer.length);
 
             return flattenedRecordBuffer;
         }
-
-        private byte[] shortArrayToByteArray(short[] input) {
-            int short_index, byte_index;
-            int iterations = input.length;
-
-            byte[] buffer = new byte[input.length * 2];
-
-            short_index = byte_index = 0;
-
-            for (; short_index != iterations; ) {
-                if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) {
-                    buffer[byte_index] = (byte) (input[short_index] & 0x00FF);
-                    buffer[byte_index + 1] = (byte) ((input[short_index] & 0xFF00) >> 8);
-                } else {
-                    buffer[byte_index] = (byte) ((input[short_index] & 0xFF00) >> 8);
-                    buffer[byte_index + 1] = (byte) (input[short_index] & 0x00FF);
-                }
-
-                short_index++;
-                byte_index += 2;
-            }
-
-            return buffer;
-        }
+//
+//        private byte[] shortArrayToByteArray(short[] input) {
+//            int short_index, byte_index;
+//            int iterations = input.length;
+//
+//            byte[] buffer = new byte[input.length * 2];
+//
+//            short_index = byte_index = 0;
+//
+//            for (; short_index != iterations; ) {
+//                if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) {
+//                    buffer[byte_index] = (byte) (input[short_index] & 0x00FF);
+//                    buffer[byte_index + 1] = (byte) ((input[short_index] & 0xFF00) >> 8);
+//                } else {
+//                    buffer[byte_index] = (byte) ((input[short_index] & 0xFF00) >> 8);
+//                    buffer[byte_index + 1] = (byte) (input[short_index] & 0x00FF);
+//                }
+//
+//                short_index++;
+//                byte_index += 2;
+//            }
+//
+//            return buffer;
+//        }
 
 
         private byte[] generateWaveFileHeader(long totalAudioLen) {
