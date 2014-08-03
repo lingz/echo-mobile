@@ -45,26 +45,13 @@ public class FirebaseUtility {
 	}
 
 	public static String speechFragmentToString(short[] audioData) {
-		ByteBuffer bytes = new ByteBuffer();
-	}
-	
-	public void pushString(String toPush) {
-		userFirebaseRef.child("transcriptionCounter").setValue(transcriptionCounter);
-		userFirebaseRef.child("transcription"+transcriptionCounter).setValue(toPush);
-		transcriptionCounter++;
-	}
-
-	public void pushSerializable(Serializable serial) {
-		userFirebaseRef.child("serializedFileCounter").setValue(serializedFileCounter);
-		String serialized = serialize(serial);
-		userFirebaseRef.child("serializedFile"+serializedFileCounter).setValue(serialized);
-		serializedFileCounter++;
-	}
-	
-	public void pushSerializableBytes(byte[] bts) {
-		String b64 = Base64.encodeToString(bts, Base64.DEFAULT);
-		userFirebaseRef.child("serializedFile"+serializedFileCounter).setValue(b64);
-		serializedFileCounter++;
+		byte[] biteme = shortArrayToByteArray(audioData);
+		WaveHeader wh = new WaveHeader(WaveHeader.FORMAT_PCM, 1, 16000, 16, biteme.length);
+		
+		String whSerialized = serialize(wh);
+		String b64 = Base64.encodeToString(biteme, Base64.DEFAULT);
+		
+		return wh+b64;
 	}
 	
 	public static String serialize(Serializable serial) {
@@ -85,6 +72,30 @@ public class FirebaseUtility {
 	    return null;
 	}
 
+	private static byte [] shortArrayToByteArray(short [] input) {
+	  int short_index, byte_index;
+	  int iterations = input.length;
+
+	  byte [] buffer = new byte[input.length * 2];
+
+	  short_index = byte_index = 0;
+
+	  for(; short_index != iterations;) {
+	  	if(ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) {
+	    	buffer[byte_index] = (byte) (input[short_index] & 0x00FF); 
+	    	buffer[byte_index + 1] = (byte) ((input[short_index] & 0xFF00) >> 8);
+	  	} else {
+	  		buffer[byte_index] = (byte) ((input[short_index] & 0xFF00) >> 8);
+	    	buffer[byte_index + 1] = (byte) (input[short_index] & 0x00FF);
+	  	}
+
+	    short_index++; 
+	    byte_index += 2;
+	  }
+
+	  return buffer;
+	}
+
 	public static class WaveHeader implements Serializable {
 
 		private static final long serialVersionUID = 1L;
@@ -103,12 +114,6 @@ public class FirebaseUtility {
 	    private int mSampleRate;
 	    private short mBitsPerSample;
 	    private int mNumBytes;
-	    
-	    /**
-	     * Construct a WaveHeader, with all fields defaulting to zero.
-	     */
-	    public WaveHeader() {
-	    }
 	    
 	    /**
 	     * Construct a WaveHeader, with fields initialized.
@@ -323,7 +328,5 @@ public class FirebaseUtility {
 	    }
 
 	}
-
-	
 	
 }
