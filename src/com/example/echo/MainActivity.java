@@ -52,13 +52,10 @@ public class MainActivity extends Activity {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.main, menu);
 
-
-
         return true;
     }
 
     public void startRecording(View v) {
-
 
         recordingThread = new RecognizerThread(recordingStartTime);
         recordingThread.start();
@@ -83,8 +80,6 @@ public class MainActivity extends Activity {
         private boolean isRecording = false;
         private AudioRecord recorder = null;
 
-
-
         public RecognizerThread(long recordingStartTime) {
             super();
         }
@@ -92,6 +87,7 @@ public class MainActivity extends Activity {
 
         @Override
         public void run() {
+
             recorder = new AudioRecord(MediaRecorder.AudioSource.MIC,
                     RECORDER_SAMPLERATE, RECORDER_CHANNEL, RECORDER_AUDIO_ENCODING,
                     RECORDER_BUFFER_SIZE);
@@ -220,7 +216,7 @@ public class MainActivity extends Activity {
             header[29] = (byte) ((byteRate >> 8) & 0xff);
             header[30] = (byte) ((byteRate >> 16) & 0xff);
             header[31] = (byte) ((byteRate >> 24) & 0xff);
-            header[32] = (byte) (2 * 16 / 8);  // block align
+            header[32] = (byte) (RECORDER_CHANNELS_NUM * 16 / 8);  // block align
             header[33] = 0;
             header[34] = RECORDER_BPP;  // bits per sample
             header[35] = 0;

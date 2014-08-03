@@ -26,35 +26,33 @@ import org.json.JSONObject;
 public class FirebaseUtility {
 
 	private static final String url = "https://echo-transcript.firebaseio.com/";
-	private final Firebase jobQueue;
+    private final String userId = Math.round(Math.random())*10000000+"";
+	private final Firebase urlRef, jobQueue, dataQueue;
 	private int count = 0;
     private String conferenceCode;
-    private String userId;
 	
 	public FirebaseUtility(String conferenceCode, String userId) {
-		jobQueue = new Firebase(url).child("jobs");
+		urlRef = new Firebase(url);
+        jobQueue = urlRef.child("jobs");
+        dataQueue = urlRef.child("data");
         this.conferenceCode = conferenceCode;
-        this.userId = userId;
+        // this.userId = userId;
 	}
 
 	public void pushSegment(byte[] segmentByteArray) {
         String data = speechFragmentToString(segmentByteArray);
-
-        Map<String, String> jobQueuePackage = createJobPackage(data);
-
-
-
-		jobQueue.child(Integer.toString(count)).setValue(jobQueuePackage);
+        jobQueue.push().setValue(conferenceCode+userId+count);
+		dataQueue.child(conferenceCode+userId+count).setValue(data);
+        count++;
     }
 
-    private Map<String, String> createJobPackage(String base64)  {
+    private Map<String, String> createJobPackage()  {
         Map<String, String> jobPackage = new HashMap<String, String>();
         jobPackage.put("conferenceCode", conferenceCode);
         jobPackage.put("userId", userId);
-        jobPackage.put("base64", base64);
+        jobPackage.put("count", count+"");
 
         return jobPackage;
-
     }
 //
 //	public static Map<String, String> fragmentToMap(SpeechFragment fragment) {
