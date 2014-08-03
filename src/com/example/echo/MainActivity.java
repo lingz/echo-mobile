@@ -1,62 +1,49 @@
 package com.example.echo;
 
-import io.socket.IOAcknowledge;
-import io.socket.IOCallback;
-import io.socket.SocketIO;
-import io.socket.SocketIOException;
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectOutputStream;
-import java.net.MalformedURLException;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import com.firebase.client.DataSnapshot;
-import com.firebase.client.Firebase;
-import com.firebase.client.FirebaseError;
-import com.firebase.client.ValueEventListener;
-
-import android.media.MediaRecorder;
-import android.net.Uri;
-import android.os.Bundle;
-import android.os.Environment;
-import android.provider.MediaStore;
 import android.app.Activity;
-import android.content.ContentResolver;
-import android.content.ContentValues;
-import android.content.Intent;
-import android.util.Log;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
+import android.os.Bundle;
 import android.view.Menu;
 import android.view.View;
 
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.Arrays;
+
 public class MainActivity extends Activity {
 
-	MediaRecorder mrec ;
-	File audiofile = null;
-	private static final String TAG="SoundRecordingDemo";
-	Firebase myFirebaseRef;
-	FirebaseUtility fbase;
-	String admin = "admin";
-	
+    FirebaseUtility fbase;
+    String admin = "admin";
+
+    private Thread recordingThread = null;
+
+    private static final int RECORDER_BPP = 16;
+    private static final int RECORDER_SAMPLERATE = 16000;
+    private static final int RECORDER_CHANNEL = AudioFormat.CHANNEL_IN_MONO;
+    private static final int RECORDER_AUDIO_ENCODING = AudioFormat.ENCODING_PCM_16BIT;
+    private static final int RECORDER_CHANNELS_NUM = 1;
+    private static final int RECORDER_BUFFER_SIZE = AudioRecord.getMinBufferSize(RECORDER_SAMPLERATE,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT);
+
+
+    private long recordingStartTime;
+    private long lastEndTime;
+
+    private int fragmentBufferLength = 0;
+
+    private ArrayList<short[]> fragmentBuffer = new ArrayList<short[]>();
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        
-        
-        fbase = new FirebaseUtility(admin);
-        
-/*        myFirebaseRef.child(admin).addValueEventListener(new ValueEventListener() {
-    	    @Override
-    	    public void onDataChange(DataSnapshot snapshot) {
-    	        System.out.println(snapshot.getValue());  //prints "Do you have data? You'll love Firebase."
-    	    }
-    	    @Override public void onCancelled(FirebaseError error) { }
-    	});*/
+
+
+        fbase = new FirebaseUtility("ABCD", admin);
     }
 
 
@@ -64,92 +51,195 @@ public class MainActivity extends Activity {
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.main, menu);
+
+
+
         return true;
     }
-    
-    public void startRecording(View v) throws IOException {
-    	mrec = new MediaRecorder();
-    	mrec.setAudioSource(MediaRecorder.AudioSource.MIC);
-    	mrec.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
-    	mrec.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
-    	System.out.println("start recording");
-    	
-    	if (audiofile == null) {
-           File sampleDir = Environment.getExternalStorageDirectory();
-           System.out.println(sampleDir);
-           try { 
-              audiofile = File.createTempFile("ibm", ".3gp", sampleDir);
-           }
-           catch (IOException e) {
-               Log.e(TAG,"sdcard access error");
-               return;
-           }
-       }
-    	mrec.setOutputFile(audiofile.getAbsolutePath());
-    	mrec.prepare();
-    	mrec.start(); 
-    }
-    public void stopRecording(View v) throws MalformedURLException {
-    	System.out.println("stopRecording");
-       mrec.stop();
-       mrec.reset();
-       mrec.release();
-       mrec = null;
-       processaudiofile();
-    }
-    protected void processaudiofile() throws MalformedURLException { // Saves the audio file
-       ContentValues values = new ContentValues(3);
-       long current = System.currentTimeMillis();
-       values.put(MediaStore.Audio.Media.TITLE, "audio" + audiofile.getName());
-       values.put(MediaStore.Audio.Media.DATE_ADDED, (int) (current / 1000));
-       values.put(MediaStore.Audio.Media.MIME_TYPE, "audio/3gpp");
-       values.put(MediaStore.Audio.Media.DATA, audiofile.getAbsolutePath());
-       ContentResolver contentResolver = getContentResolver();
-        
-       Uri base = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-       Uri newUri = contentResolver.insert(base, values);
-       System.out.println(audiofile.getAbsolutePath());
-       
-       //newUri = Uri.parse("http://4773af77.ngrok.com/test");
-       
-       System.out.println(newUri);
-       sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, newUri));   
-       //myFirebaseRef.child("message").setValue("Do you have data? You'll love Firebase.");  
-       fbase.pushSerializable(FirebaseUtility.serialize(newUri.toString()) );
-       
-    }
-    
-    
-    static class TransferThread extends Thread {
-        InputStream in;
-        FileOutputStream out;
 
-        TransferThread(InputStream in, FileOutputStream out) {
-          this.in=in;
-          this.out=out;
+    public void startRecording(View v) {
+
+
+        recordingThread = new RecognizerThread(recordingStartTime);
+        recordingThread.start();
+    }
+
+
+    public void stopRecording(View v) {
+        recordingThread.interrupt();
+        try {
+            recordingThread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
+        recordingThread = null;
+    }
+
+
+
+
+    private final class RecognizerThread extends Thread {
+
+        private boolean isRecording = false;
+        private AudioRecord recorder = null;
+
+
+
+        public RecognizerThread(long recordingStartTime) {
+            super();
+        }
+
 
         @Override
         public void run() {
-          byte[] buf=new byte[8192];
-          int len;
+            recorder = new AudioRecord(MediaRecorder.AudioSource.MIC,
+                    RECORDER_SAMPLERATE, RECORDER_CHANNEL, RECORDER_AUDIO_ENCODING,
+                    RECORDER_BUFFER_SIZE);
 
-          try {
-            while ((len=in.read(buf)) >= 0) {
-              out.write(buf, 0, len);
+            int i = recorder.getState();
+            if (i == 1)
+                recorder.startRecording();
+
+            isRecording = true;
+
+            recordingStartTime = System.currentTimeMillis();
+            lastEndTime = recordingStartTime;
+            short[] buffer = new short[RECORDER_BUFFER_SIZE];
+
+
+            while (!interrupted()) {
+                int nread = recorder.read(buffer, 0, buffer.length);
+                if (-1 == nread) {
+                    throw new RuntimeException("error reading audio buffer");
+                } else if (nread > 0) {
+
+                    fragmentBuffer.add(Arrays.copyOfRange(buffer, 0, nread));
+                    fragmentBufferLength += nread;
+                }
             }
 
-            in.close();
+            processSoundSegment();
+            recorder.stop();
+            recorder.release();
 
-            out.flush();
-            out.getFD().sync();
-            out.close();
-          }
-          catch (IOException e) {
-            Log.e(getClass().getSimpleName(),
-                  "Exception transferring file", e);
-          }
         }
-      }
-    
+
+        private byte[] processSoundSegment() {
+
+
+            byte[] flattenedRecordBuffer = new byte[fragmentBufferLength * 2 + 44];
+
+            byte[] wavHeader = generateWaveFileHeader(fragmentBufferLength * 2);
+
+            System.arraycopy(wavHeader, 0, flattenedRecordBuffer, 0, 44);
+
+            int bufferProgress = 44;
+
+            for (short[] miniBuffer : fragmentBuffer) {
+                byte[] byteMiniBuffer = shortArrayToByteArray(miniBuffer);
+                System.arraycopy(byteMiniBuffer, 0, flattenedRecordBuffer, bufferProgress, miniBuffer.length);
+                bufferProgress += miniBuffer.length;
+            }
+
+            long newEndTime = System.currentTimeMillis();
+
+            lastEndTime = newEndTime;
+
+
+            fragmentBufferLength = 0;
+            fragmentBuffer = new ArrayList<short[]>();
+
+            System.out.println("DONE: " + flattenedRecordBuffer.length);
+
+            return flattenedRecordBuffer;
+        }
+
+        private byte[] shortArrayToByteArray(short[] input) {
+            int short_index, byte_index;
+            int iterations = input.length;
+
+            byte[] buffer = new byte[input.length * 2];
+
+            short_index = byte_index = 0;
+
+            for (; short_index != iterations; ) {
+                if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) {
+                    buffer[byte_index] = (byte) (input[short_index] & 0x00FF);
+                    buffer[byte_index + 1] = (byte) ((input[short_index] & 0xFF00) >> 8);
+                } else {
+                    buffer[byte_index] = (byte) ((input[short_index] & 0xFF00) >> 8);
+                    buffer[byte_index + 1] = (byte) (input[short_index] & 0x00FF);
+                }
+
+                short_index++;
+                byte_index += 2;
+            }
+
+            return buffer;
+        }
+
+
+        private byte[] generateWaveFileHeader(long totalAudioLen) {
+
+            long longSampleRate = RECORDER_SAMPLERATE;
+            long totalDataLen = totalAudioLen + 44;
+            int channels = 1;
+            long byteRate = RECORDER_BPP * RECORDER_SAMPLERATE * RECORDER_CHANNELS_NUM / 8;
+
+            byte[] header = new byte[44];
+
+            header[0] = 'R';  // RIFF/WAVE header
+            header[1] = 'I';
+            header[2] = 'F';
+            header[3] = 'F';
+            header[4] = (byte) (totalDataLen & 0xff);
+            header[5] = (byte) ((totalDataLen >> 8) & 0xff);
+            header[6] = (byte) ((totalDataLen >> 16) & 0xff);
+            header[7] = (byte) ((totalDataLen >> 24) & 0xff);
+            header[8] = 'W';
+            header[9] = 'A';
+            header[10] = 'V';
+            header[11] = 'E';
+            header[12] = 'f';  // 'fmt ' chunk
+            header[13] = 'm';
+            header[14] = 't';
+            header[15] = ' ';
+            header[16] = 16;  // 4 bytes: size of 'fmt ' chunk
+            header[17] = 0;
+            header[18] = 0;
+            header[19] = 0;
+            header[20] = 1;  // format = 1
+            header[21] = 0;
+            header[22] = (byte) channels;
+            header[23] = 0;
+            header[24] = (byte) (longSampleRate & 0xff);
+            header[25] = (byte) ((longSampleRate >> 8) & 0xff);
+            header[26] = (byte) ((longSampleRate >> 16) & 0xff);
+            header[27] = (byte) ((longSampleRate >> 24) & 0xff);
+            header[28] = (byte) (byteRate & 0xff);
+            header[29] = (byte) ((byteRate >> 8) & 0xff);
+            header[30] = (byte) ((byteRate >> 16) & 0xff);
+            header[31] = (byte) ((byteRate >> 24) & 0xff);
+            header[32] = (byte) (2 * 16 / 8);  // block align
+            header[33] = 0;
+            header[34] = RECORDER_BPP;  // bits per sample
+            header[35] = 0;
+            header[36] = 'd';
+            header[37] = 'a';
+            header[38] = 't';
+            header[39] = 'a';
+            header[40] = (byte) (totalAudioLen & 0xff);
+            header[41] = (byte) ((totalAudioLen >> 8) & 0xff);
+            header[42] = (byte) ((totalAudioLen >> 16) & 0xff);
+            header[43] = (byte) ((totalAudioLen >> 24) & 0xff);
+
+            return header;
+
+        }
+
+    }
 }
+
+
+
+
