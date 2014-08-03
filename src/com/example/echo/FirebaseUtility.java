@@ -26,7 +26,7 @@ import org.json.JSONObject;
 public class FirebaseUtility {
 
 	private static final String url = "https://echo-transcript.firebaseio.com/";
-    private final String userId = Math.round(Math.random())*10000000+"";
+    private final String userId = Math.round(Math.random()*10000000)+"";
 	private final Firebase urlRef, jobQueue, dataQueue;
 	private int count = 0;
     private String conferenceCode;
@@ -36,34 +36,28 @@ public class FirebaseUtility {
         jobQueue = urlRef.child("jobs");
         dataQueue = urlRef.child("data");
         this.conferenceCode = conferenceCode;
-        // this.userId = userId;
+//        this.userId = userId;
 	}
 
-	public void pushSegment(byte[] segmentByteArray) {
+	public void pushSegment(byte[] segmentByteArray, long starttime, long endtime) {
         String data = speechFragmentToString(segmentByteArray);
-        jobQueue.push().setValue(conferenceCode+userId+count);
-		dataQueue.child(conferenceCode+userId+count).setValue(data);
+        String uniqueId = conferenceCode+"_"+userId+"_"+count;
+        Map<String, String> map = createJobPackage(starttime, endtime);
+        map.put("dataId", uniqueId);
+        jobQueue.push().setValue(map);
+		dataQueue.child(uniqueId).setValue(data);
         count++;
     }
 
-    private Map<String, String> createJobPackage()  {
+    private Map<String, String> createJobPackage(long starttime, long endtime)  {
         Map<String, String> jobPackage = new HashMap<String, String>();
-        jobPackage.put("conferenceCode", conferenceCode);
         jobPackage.put("userId", userId);
         jobPackage.put("count", count+"");
-
+        jobPackage.put("startTime", starttime+"");
+        jobPackage.put("endTime", endtime+"");
+        jobPackage.put("conferenceCode", conferenceCode);
         return jobPackage;
     }
-//
-//	public static Map<String, String> fragmentToMap(SpeechFragment fragment) {
-//		Map<String, String> map = new HashMap<String, String>();
-//		map.put("starttime", fragment.starttime);
-//		map.put("endtime", fragment.endtime);
-//		map.put("sound", speechFragmentToString(fragment.audioData));
-//		map.put("words", fragment.speechText);
-//		map.put("prob", fragment.probability);
-//		return map;
-//	}
 
 	public static String speechFragmentToString(byte[] audioData) {
 		String b64 = Base64.encodeToString(audioData, Base64.DEFAULT);

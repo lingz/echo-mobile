@@ -28,10 +28,6 @@ public class MainActivity extends Activity {
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT);
 
-
-    private long recordingStartTime;
-    private long lastEndTime;
-
     private int fragmentBufferLength = 0;
 
     private ArrayList<byte[]> fragmentBuffer = new ArrayList<byte[]>();
@@ -41,7 +37,6 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
 
         fbase = new FirebaseUtility("ABCD", admin);
     }
@@ -56,13 +51,16 @@ public class MainActivity extends Activity {
     }
 
     public void startRecording(View v) {
-
-        recordingThread = new RecognizerThread(recordingStartTime);
+        recordingThread = new RecognizerThread();
         recordingThread.start();
     }
 
 
     public void stopRecording(View v) {
+
+        if(recordingThread == null)
+            return;
+
         recordingThread.interrupt();
         try {
             recordingThread.join();
@@ -73,20 +71,22 @@ public class MainActivity extends Activity {
     }
 
 
-
-
     private final class RecognizerThread extends Thread {
 
         private boolean isRecording = false;
         private AudioRecord recorder = null;
 
-        public RecognizerThread(long recordingStartTime) {
+        public RecognizerThread() {
             super();
         }
 
 
         @Override
         public void run() {
+
+            long startTime, endTime;
+
+            startTime = endTime = System.currentTimeMillis();
 
             recorder = new AudioRecord(MediaRecorder.AudioSource.MIC,
                     RECORDER_SAMPLERATE, RECORDER_CHANNEL, RECORDER_AUDIO_ENCODING,
@@ -98,8 +98,6 @@ public class MainActivity extends Activity {
 
             isRecording = true;
 
-            recordingStartTime = System.currentTimeMillis();
-            lastEndTime = recordingStartTime;
             byte[] buffer = new byte[RECORDER_BUFFER_SIZE];
 
 
@@ -112,17 +110,25 @@ public class MainActivity extends Activity {
                     fragmentBuffer.add(Arrays.copyOfRange(buffer, 0, nread));
                     fragmentBufferLength += nread;
                 }
+
+                endTime = System.currentTimeMillis();
+                if(endTime - startTime > 30*1000) {
+                    byte[] soundSegmentData = processSoundSegment();
+                    fbase.pushSegment(soundSegmentData, startTime, endTime);
+                    startTime = endTime;
+                }
             }
 
-            byte[] soundSegmentData = processSoundSegment();
-            fbase.pushSegment(soundSegmentData);
+            if(startTime != endTime) {
+                byte[] soundSegmentData = processSoundSegment();
+                fbase.pushSegment(soundSegmentData, startTime, endTime);
+            }
+
             recorder.stop();
             recorder.release();
-
         }
 
         private byte[] processSoundSegment() {
-
 
             byte[] flattenedRecordBuffer = new byte[fragmentBufferLength + 44];
 
@@ -136,11 +142,6 @@ public class MainActivity extends Activity {
                 System.arraycopy(miniBuffer, 0, flattenedRecordBuffer, bufferProgress, miniBuffer.length);
                 bufferProgress += miniBuffer.length;
             }
-
-            long newEndTime = System.currentTimeMillis();
-
-            lastEndTime = newEndTime;
-
 
             fragmentBufferLength = 0;
             fragmentBuffer = new ArrayList<byte[]>();
@@ -230,7 +231,6 @@ public class MainActivity extends Activity {
             header[43] = (byte) ((totalAudioLen >> 24) & 0xff);
 
             return header;
-
         }
 
     }
