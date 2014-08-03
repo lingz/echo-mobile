@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 
+import android.util.Base64;
 import android.util.Log;
 
 import com.firebase.client.DataSnapshot;
@@ -36,6 +37,12 @@ public class FirebaseUtility {
 		serializedFileCounter++;
 	}
 	
+	public void pushSerializableBytes(byte[] bts) {
+		String b64 = Base64.encodeToString(bts, Base64.DEFAULT);
+		userFirebaseRef.child("serializedFile"+serializedFileCounter).setValue(b64);
+		serializedFileCounter++;
+	}
+	
 	public static String serialize(Serializable serial) {
 	    try {
 	        ByteArrayOutputStream bo = new ByteArrayOutputStream();
@@ -45,7 +52,7 @@ public class FirebaseUtility {
 	        
 	        // This encoding induces a bijection between byte[] and String (unlike UTF-8)
 	        // Must also use this encoding when decoding the String
-	        return bo.toString("ISO-8859-1");
+	        return Base64.encodeToString(bo.toByteArray(), Base64.DEFAULT);
 	    } catch (Exception e) {
             Log.e(FirebaseUtility.class.getSimpleName(),
                     "Exception serializing serializable object", e);
