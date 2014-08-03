@@ -8,6 +8,7 @@ import io.socket.SocketIOException;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectOutputStream;
 import java.net.MalformedURLException;
 
@@ -38,20 +39,24 @@ public class MainActivity extends Activity {
 	File audiofile = null;
 	private static final String TAG="SoundRecordingDemo";
 	Firebase myFirebaseRef;
+	FirebaseUtility fbase;
+	String admin = "admin";
 	
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         
-        myFirebaseRef = new Firebase("https://echokaffy.firebaseio.com/");
-        myFirebaseRef.child("message").addValueEventListener(new ValueEventListener() {
+        
+        fbase = new FirebaseUtility(admin);
+        
+/*        myFirebaseRef.child(admin).addValueEventListener(new ValueEventListener() {
     	    @Override
     	    public void onDataChange(DataSnapshot snapshot) {
     	        System.out.println(snapshot.getValue());  //prints "Do you have data? You'll love Firebase."
     	    }
     	    @Override public void onCancelled(FirebaseError error) { }
-    	});
+    	});*/
     }
 
 
@@ -109,7 +114,42 @@ public class MainActivity extends Activity {
        
        System.out.println(newUri);
        sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, newUri));   
-       myFirebaseRef.child("message").setValue("Do you have data? You'll love Firebase.");   
+       //myFirebaseRef.child("message").setValue("Do you have data? You'll love Firebase.");  
+       fbase.pushSerializable(FirebaseUtility.serialize(newUri.toString()) );
+       
     }
+    
+    
+    static class TransferThread extends Thread {
+        InputStream in;
+        FileOutputStream out;
+
+        TransferThread(InputStream in, FileOutputStream out) {
+          this.in=in;
+          this.out=out;
+        }
+
+        @Override
+        public void run() {
+          byte[] buf=new byte[8192];
+          int len;
+
+          try {
+            while ((len=in.read(buf)) >= 0) {
+              out.write(buf, 0, len);
+            }
+
+            in.close();
+
+            out.flush();
+            out.getFD().sync();
+            out.close();
+          }
+          catch (IOException e) {
+            Log.e(getClass().getSimpleName(),
+                  "Exception transferring file", e);
+          }
+        }
+      }
     
 }
